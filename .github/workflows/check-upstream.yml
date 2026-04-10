@@ -1,4 +1,4 @@
-name: Check ImmortalWrt Upstream Updates
+name: 检查 ImmortalWrt 上游更新
 
 on:
   schedule:
@@ -8,13 +8,14 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   check:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout repo
+      - name: 检出仓库
         uses: actions/checkout@v4
 
       - name: 获取上游最新 commit
@@ -58,8 +59,11 @@ jobs:
           git commit -m "Update upstream version to ${{ steps.upstream.outputs.latest }}"
           git push
 
-      - name: 触发 build.yml
+      - name: 触发编译工作流
         if: steps.compare.outputs.updated == 'yes'
-        uses: peter-evans/workflow-dispatch@v2
-        with:
-          workflow: build.yml
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/build.yml/dispatches \
+            -d '{"ref":"main"}'

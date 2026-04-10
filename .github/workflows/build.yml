@@ -1,10 +1,11 @@
-name: Build ImmortalWrt Multi-Device
+name: 编译 ImmortalWrt 多设备固件
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   build:
@@ -128,12 +129,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: 触发自动发布 Release
         if: success()
-        uses: peter-evans/workflow-dispatch@v2
-        with:
-          workflow: release.yml
-          ref: main
-          inputs:
-          device: ${{ matrix.device }}
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches \
+            -d '{"ref":"main","inputs":{"device":"${{ matrix.device }}"}}'
       - name: 解析构建日志
         working-directory: openwrt
         run: |

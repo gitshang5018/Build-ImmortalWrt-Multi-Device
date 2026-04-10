@@ -1,4 +1,4 @@
-name: Auto Release per Device
+name: 自动发布设备固件
 
 on:
   workflow_dispatch:
