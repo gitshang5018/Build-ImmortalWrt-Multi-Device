@@ -53,7 +53,6 @@ CONFIG_PACKAGE_kmod-qca-nss-drv-pptp=y
 CONFIG_PACKAGE_kmod-qca-nss-drv-gre=y
 CONFIG_PACKAGE_kmod-qca-nss-drv-map-t=y
 CONFIG_PACKAGE_kmod-qca-nss-drv-ipsecmgr=y
-CONFIG_PACKAGE_kmod-qca-nss-drv-pppoe=y
 EOF
     ;;
 

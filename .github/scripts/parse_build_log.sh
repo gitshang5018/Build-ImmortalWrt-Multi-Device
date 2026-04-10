@@ -1,14 +1,23 @@
 #!/bin/bash
-set -e
 
 LOG_FILE="$1"
 OUT_FILE="$2"
 
 echo "解析构建日志: $LOG_FILE"
 
-VERSION=$(grep -m1 "ImmortalWrt" "$LOG_FILE" | sed 's/.*ImmortalWrt //')
-KERNEL=$(grep -m1 "Kernel version" "$LOG_FILE" | awk '{print $3}')
-TARGET=$(grep -m1 "Target:" "$LOG_FILE" | sed 's/Target: //')
+VERSION=""
+KERNEL=""
+TARGET=""
+
+if [ -f "$LOG_FILE" ]; then
+  VERSION=$(grep -m1 "ImmortalWrt" "$LOG_FILE" | sed 's/.*ImmortalWrt //' || true)
+  KERNEL=$(grep -m1 "Kernel version" "$LOG_FILE" | awk '{print $3}' || true)
+  TARGET=$(grep -m1 "Target:" "$LOG_FILE" | sed 's/Target: //' || true)
+fi
+
+[ -z "$VERSION" ] && VERSION="未知"
+[ -z "$KERNEL" ] && KERNEL="未知"
+[ -z "$TARGET" ] && TARGET="未知"
 DATE=$(date +"%Y-%m-%d %H:%M:%S")
 
 {
