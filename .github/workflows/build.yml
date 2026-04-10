@@ -73,7 +73,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: openwrt/dl
-          key: dl-${{ hashFiles('*.config') }}
+          key: dl-${{ hashFiles('configs/*.config') }}
           restore-keys: dl-
 
       - name: 更新 feeds
