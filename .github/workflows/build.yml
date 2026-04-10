@@ -86,6 +86,10 @@ jobs:
         run: |
           cp configs/${DEVICE}.config openwrt/.config
 
+      - name: 自动适配 WiFi 驱动
+        run: |
+          bash .github/scripts/auto_wifi.sh openwrt/.config $DEVICE
+
       - name: 自动适配网络加速（NSS / Shortcut-FE / FlowOffload）
         run: |
           bash .github/scripts/auto_turboacc.sh openwrt/.config $DEVICE
