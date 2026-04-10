@@ -1,0 +1,142 @@
+name: Build ImmortalWrt Multi-Device
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: 编译固件 - ${{ matrix.device }}
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        device:
+          - n5105
+          - wyse3040
+          - mt7621
+          - r619ac
+          - ax6600
+          - jdc_ax1800
+
+    env:
+      DEVICE: ${{ matrix.device }}
+
+    steps:
+      - name: 清理磁盘空间
+        run: |
+          docker image prune -f
+          sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android
+          sudo apt update
+          sudo apt -y purge azure-cli* docker* ghc* zulu* llvm* firefox google* dotnet* powershell* openjdk* mysql* php* mongodb*
+          sudo apt -y autoremove --purge
+          sudo apt clean
+
+      - name: 安装编译依赖
+        run: |
+          sudo apt update
+          sudo apt -y install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+            bzip2 ccache clang cmake cpio curl device-tree-compiler flex gawk gcc-multilib g++-multilib \
+            gettext genisoimage git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev \
+            libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev \
+            libpython3-dev libreadline-dev libssl-dev libtool llvm lrzsz msmtp ninja-build p7zip p7zip-full \
+            patch pkgconf python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools \
+            subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+
+      - name: 拉取 ImmortalWrt 源码
+        run: |
+          git clone https://github.com/immortalwrt/immortalwrt.git openwrt
+
+      - name: 配置缓存
+        uses: actions/cache@v4
+        with:
+          path: |
+            openwrt/.ccache
+            openwrt/staging_dir/host*
+            openwrt/staging_dir/toolchain-*
+          key: ${{ runner.os }}-${{ matrix.device }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.device }}-
+
+      - name: 设置 CCache
+        run: |
+          echo "CCACHE_DIR=$GITHUB_WORKSPACE/openwrt/.ccache" >> $GITHUB_ENV
+
+      - name: 下载缓存 (DL)
+        uses: actions/cache@v4
+        with:
+          path: openwrt/dl
+          key: dl-${{ hashFiles('configs/*.config') }}
+          restore-keys: dl-
+
+      - name: 更新 feeds
+        working-directory: openwrt
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: 复制设备配置
+        run: |
+          cp configs/${DEVICE}.config openwrt/.config
+
+      - name: 自动适配网络加速（NSS / Shortcut-FE / FlowOffload）
+        run: |
+          bash .github/scripts/auto_netacc.sh openwrt/.config $DEVICE
+
+      - name: 注入 MT7621 WiFi 启动修复脚本
+        if: matrix.device == 'mt7621'
+        working-directory: openwrt
+        run: |
+          mkdir -p package/base-files/files/etc/init.d
+          cp $GITHUB_WORKSPACE/.github/scripts/mtwifi-init package/base-files/files/etc/init.d/mtwifi-init
+          chmod +x package/base-files/files/etc/init.d/mtwifi-init          
+      - name: 生成最终配置
+        working-directory: openwrt
+        run: make defconfig
+
+      - name: 下载依赖
+        working-directory: openwrt
+        run: make download -j16
+
+      - name: 编译固件
+        working-directory: openwrt
+        run: |
+          make -j$(nproc) || make -j4 V=s
+
+      - name: 打包固件
+        run: |
+          mkdir -p artifact/${DEVICE}
+          cp -rf openwrt/bin/targets/*/* artifact/${DEVICE}/
+
+      - name: 上传固件
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.device }}_firmware
+          path: artifact/${{ matrix.device }}/
+     
+      - name: 清理旧 Release
+        if: github.ref == 'refs/heads/main'
+        run: bash .github/scripts/cleanup_releases.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 清理旧构建产物
+        run: bash .github/scripts/cleanup_artifacts.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 触发自动发布 Release
+        if: success()
+        uses: peter-evans/workflow-dispatch@v2
+        with:
+          workflow: release.yml
+          ref: main
+          inputs:
+          device: ${{ matrix.device }}
+      - name: 解析构建日志
+        working-directory: openwrt
+        run: |
+          bash $GITHUB_WORKSPACE/.github/scripts/parse_build_log.sh \
+            build.log \
+            $GITHUB_WORKSPACE/artifact/${DEVICE}/build_info.txt

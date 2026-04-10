@@ -1,0 +1,65 @@
+name: Check ImmortalWrt Upstream Updates
+
+on:
+  schedule:
+    # 每 6 小时检查一次
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 获取上游最新 commit
+        id: upstream
+        run: |
+          LATEST=$(git ls-remote https://github.com/immortalwrt/immortalwrt.git HEAD | awk '{print $1}')
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+
+      - name: 读取本地记录的 commit
+        id: local
+        run: |
+          if [ -f UPSTREAM_VERSION ]; then
+            LOCAL=$(cat UPSTREAM_VERSION)
+          else
+            LOCAL="none"
+          fi
+          echo "local=$LOCAL" >> $GITHUB_OUTPUT
+
+      - name: 判断是否有更新
+        id: compare
+        run: |
+          if [ "${{ steps.upstream.outputs.latest }}" = "${{ steps.local.outputs.local }}" ]; then
+            echo "updated=no" >> $GITHUB_OUTPUT
+          else
+            echo "updated=yes" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 退出（无更新）
+        if: steps.compare.outputs.updated == 'no'
+        run: |
+          echo "上游无更新，停止执行。"
+          exit 0
+
+      - name: 更新本地 UPSTREAM_VERSION
+        if: steps.compare.outputs.updated == 'yes'
+        run: |
+          echo "${{ steps.upstream.outputs.latest }}" > UPSTREAM_VERSION
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add UPSTREAM_VERSION
+          git commit -m "Update upstream version to ${{ steps.upstream.outputs.latest }}"
+          git push
+
+      - name: 触发 build.yml
+        if: steps.compare.outputs.updated == 'yes'
+        uses: peter-evans/workflow-dispatch@v2
+        with:
+          workflow: build.yml

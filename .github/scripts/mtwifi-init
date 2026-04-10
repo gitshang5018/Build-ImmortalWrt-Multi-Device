@@ -1,0 +1,33 @@
+#!/bin/sh /etc/rc.common
+START=99
+
+start() {
+    (
+        sleep 5
+        modprobe mt7603e 2>/dev/null
+        modprobe mt76x2e 2>/dev/null
+        sleep 2
+
+        # bring up interfaces
+        ip link set ra0 up 2>/dev/null
+        ip link set rai0 up 2>/dev/null
+
+        # 加入 LAN 网桥
+        lan_if=$(uci -q get network.lan.ifname)
+        if [ -n "$lan_if" ]; then
+            if ! echo "$lan_if" | grep -q "ra0"; then
+                uci set network.lan.ifname="$lan_if ra0 rai0"
+                uci commit network
+                /etc/init.d/network reload
+            fi
+        fi
+
+        # reload mtwifi
+        /etc/init.d/mtwifi reload 2>/dev/null
+    ) &
+}
+
+stop() {
+    ip link set ra0 down 2>/dev/null
+    ip link set rai0 down 2>/dev/null
+}

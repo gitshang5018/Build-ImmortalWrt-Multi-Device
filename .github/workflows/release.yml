@@ -1,0 +1,78 @@
+name: Auto Release per Device
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: "选择要发布的设备"
+        required: true
+        type: choice
+        options:
+          - n5105
+          - wyse3040
+          - mt7621
+          - r619ac
+          - ax6600
+          - jdc_ax1800
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    env:
+      DEVICE: ${{ inputs.device }}
+
+    steps:
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.DEVICE }}_firmware
+          path: firmware/
+
+      - name: 读取构建信息
+        id: info
+        run: |
+          INFO_FILE="firmware/build_info.txt"
+          VERSION=$(grep "固件版本" "$INFO_FILE" | sed 's/固件版本: //')
+          KERNEL=$(grep "内核版本" "$INFO_FILE" | sed 's/内核版本: //')
+          TARGET=$(grep "目标平台" "$INFO_FILE" | sed 's/目标平台: //')
+          DATE=$(grep "构建时间" "$INFO_FILE" | sed 's/构建时间: //')
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "kernel=$KERNEL" >> $GITHUB_OUTPUT
+          echo "target=$TARGET" >> $GITHUB_OUTPUT
+          echo "date=$DATE" >> $GITHUB_OUTPUT
+
+      - name: 生成 tag 和 Release 名称
+        id: vars
+        run: |
+          TAG="${DEVICE}-${{ steps.info.outputs.date }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "name=固件发布 - ${DEVICE} - $TAG" >> $GITHUB_OUTPUT
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: ${{ steps.vars.outputs.name }}
+          body: |
+            ## 📦 设备：${{ env.DEVICE }}
+
+            ### 🔧 构建信息
+            - 固件版本：${{ steps.info.outputs.version }}
+            - 内核版本：${{ steps.info.outputs.kernel }}
+            - 目标平台：${{ steps.info.outputs.target }}
+            - 构建时间：${{ steps.info.outputs.date }}
+
+            ### 📁 包含内容
+            - 固件文件
+            - build_info.txt
+            - manifest / buildinfo
+            - 所有 ipk 插件包（如有）
+
+          files: |
+            firmware/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

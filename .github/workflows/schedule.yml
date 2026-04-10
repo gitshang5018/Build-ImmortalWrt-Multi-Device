@@ -1,0 +1,22 @@
+name: Scheduled ImmortalWrt Build
+
+on:
+  schedule:
+    # 每天北京时间早上 4 点自动构建
+    - cron: "0 20 * * *"
+    # 每周一早上 4 点自动构建
+    - cron: "0 20 * * 1"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger main build workflow
+        uses: peter-evans/workflow-dispatch@v2
+        with:
+          workflow: build.yml
