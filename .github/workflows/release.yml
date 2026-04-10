@@ -43,12 +43,12 @@ jobs:
         run: |
           INFO_FILE="firmware/build_info.txt"
           if [ -f "$INFO_FILE" ]; then
-            VERSION=$(grep "固件版本" "$INFO_FILE" | sed 's/固件版本: //' || true)
-            KERNEL=$(grep "内核版本" "$INFO_FILE" | sed 's/内核版本: //' || true)
-            TARGET=$(grep "目标平台" "$INFO_FILE" | sed 's/目标平台: //' || true)
-            DATE=$(grep "构建时间" "$INFO_FILE" | sed 's/构建时间: //' || true)
+            # 添加了 tr -d '\r' 来强制清理可能存在的 Windows 换行符
+            VERSION=$(grep "固件版本" "$INFO_FILE" | sed 's/固件版本: //' | tr -d '\r' || true)
+            KERNEL=$(grep "内核版本" "$INFO_FILE" | sed 's/内核版本: //' | tr -d '\r' || true)
+            TARGET=$(grep "目标平台" "$INFO_FILE" | sed 's/目标平台: //' | tr -d '\r' || true)
+            DATE=$(grep "构建时间" "$INFO_FILE" | sed 's/构建时间: //' | tr -d '\r' || true)
           fi
-
           echo "version=${VERSION:-未知}" >> $GITHUB_OUTPUT
           echo "kernel=${KERNEL:-未知}" >> $GITHUB_OUTPUT
           echo "target=${TARGET:-未知}" >> $GITHUB_OUTPUT
@@ -57,9 +57,15 @@ jobs:
       - name: 生成 tag 和 Release 名称
         id: vars
         run: |
-          TAG="${DEVICE}-${{ steps.info.outputs.date }}"
+          RAW_TAG="${DEVICE}-${{ steps.info.outputs.date }}"
+          
+          # 关键修复：将空格和冒号替换为连字符，并删除任何残留的换行/回车符
+          TAG=$(echo "$RAW_TAG" | tr ' :' '-' | tr -d '\r\n')
+          
           echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "name=固件发布 - ${DEVICE} - $TAG" >> $GITHUB_OUTPUT
+          
+          # Release 名称可以包含空格，所以这里不做限制
+          echo "name=固件发布 - ${DEVICE} - ${{ steps.info.outputs.date }}" >> $GITHUB_OUTPUT
 
       - name: 创建 Release
         uses: softprops/action-gh-release@v2
