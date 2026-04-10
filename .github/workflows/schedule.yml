@@ -2,10 +2,8 @@ name: 定时编译 ImmortalWrt 固件
 
 on:
   schedule:
-    # 每天北京时间早上 4 点自动构建
+    # 每天北京时间早上 4 点自动构建（UTC 20:00）
     - cron: "0 20 * * *"
-    # 每周一早上 4 点自动构建
-    - cron: "0 20 * * 1"
 
   workflow_dispatch:
 

@@ -27,6 +27,9 @@ jobs:
       DEVICE: ${{ matrix.device }}
 
     steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
       - name: 清理磁盘空间
         run: |
           docker image prune -f
@@ -70,7 +73,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: openwrt/dl
-          key: dl-${{ hashFiles('configs/*.config') }}
+          key: dl-${{ hashFiles('*.config') }}
           restore-keys: dl-
 
       - name: 更新 feeds
@@ -81,11 +84,11 @@ jobs:
 
       - name: 复制设备配置
         run: |
-          cp configs/${DEVICE}.config openwrt/.config
+          cp ${DEVICE}.config openwrt/.config
 
       - name: 自动适配网络加速（NSS / Shortcut-FE / FlowOffload）
         run: |
-          bash .github/scripts/auto_netacc.sh openwrt/.config $DEVICE
+          bash .github/scripts/auto_turboacc.sh openwrt/.config $DEVICE
 
       - name: 注入 MT7621 WiFi 启动修复脚本
         if: matrix.device == 'mt7621'
@@ -93,7 +96,8 @@ jobs:
         run: |
           mkdir -p package/base-files/files/etc/init.d
           cp $GITHUB_WORKSPACE/.github/scripts/mtwifi-init package/base-files/files/etc/init.d/mtwifi-init
-          chmod +x package/base-files/files/etc/init.d/mtwifi-init          
+          chmod +x package/base-files/files/etc/init.d/mtwifi-init
+
       - name: 生成最终配置
         working-directory: openwrt
         run: make defconfig
@@ -105,28 +109,37 @@ jobs:
       - name: 编译固件
         working-directory: openwrt
         run: |
-          make -j$(nproc) || make -j4 V=s
+          make -j$(nproc) 2>&1 | tee build.log || make -j4 V=s 2>&1 | tee build.log
 
       - name: 打包固件
         run: |
           mkdir -p artifact/${DEVICE}
           cp -rf openwrt/bin/targets/*/* artifact/${DEVICE}/
 
+      - name: 解析构建日志
+        working-directory: openwrt
+        run: |
+          bash $GITHUB_WORKSPACE/.github/scripts/parse_build_log.sh \
+            build.log \
+            $GITHUB_WORKSPACE/artifact/${DEVICE}/build_info.txt
+
       - name: 上传固件
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.device }}_firmware
           path: artifact/${{ matrix.device }}/
-     
+
       - name: 清理旧 Release
         if: github.ref == 'refs/heads/main'
         run: bash .github/scripts/cleanup_releases.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: 清理旧构建产物
         run: bash .github/scripts/cleanup_artifacts.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: 触发自动发布 Release
         if: success()
         run: |
@@ -134,10 +147,4 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             https://api.github.com/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches \
-            -d '{"ref":"main","inputs":{"device":"${{ matrix.device }}"}}'
-      - name: 解析构建日志
-        working-directory: openwrt
-        run: |
-          bash $GITHUB_WORKSPACE/.github/scripts/parse_build_log.sh \
-            build.log \
-            $GITHUB_WORKSPACE/artifact/${DEVICE}/build_info.txt
+            -d '{"ref":"main","inputs":{"device":"${{ matrix.device }}","run_id":"${{ github.run_id }}"}}'

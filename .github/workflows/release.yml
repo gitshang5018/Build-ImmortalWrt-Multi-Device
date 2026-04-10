@@ -14,6 +14,10 @@ on:
           - r619ac
           - ax6600
           - jdc_ax1800
+      run_id:
+        description: "构建工作流的 Run ID（自动触发时传入）"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -30,20 +34,24 @@ jobs:
         with:
           name: ${{ env.DEVICE }}_firmware
           path: firmware/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id }}
 
       - name: 读取构建信息
         id: info
         run: |
           INFO_FILE="firmware/build_info.txt"
-          VERSION=$(grep "固件版本" "$INFO_FILE" | sed 's/固件版本: //')
-          KERNEL=$(grep "内核版本" "$INFO_FILE" | sed 's/内核版本: //')
-          TARGET=$(grep "目标平台" "$INFO_FILE" | sed 's/目标平台: //')
-          DATE=$(grep "构建时间" "$INFO_FILE" | sed 's/构建时间: //')
+          if [ -f "$INFO_FILE" ]; then
+            VERSION=$(grep "固件版本" "$INFO_FILE" | sed 's/固件版本: //' || true)
+            KERNEL=$(grep "内核版本" "$INFO_FILE" | sed 's/内核版本: //' || true)
+            TARGET=$(grep "目标平台" "$INFO_FILE" | sed 's/目标平台: //' || true)
+            DATE=$(grep "构建时间" "$INFO_FILE" | sed 's/构建时间: //' || true)
+          fi
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "kernel=$KERNEL" >> $GITHUB_OUTPUT
-          echo "target=$TARGET" >> $GITHUB_OUTPUT
-          echo "date=$DATE" >> $GITHUB_OUTPUT
+          echo "version=${VERSION:-未知}" >> $GITHUB_OUTPUT
+          echo "kernel=${KERNEL:-未知}" >> $GITHUB_OUTPUT
+          echo "target=${TARGET:-未知}" >> $GITHUB_OUTPUT
+          echo "date=${DATE:-$(date +%Y-%m-%d)}" >> $GITHUB_OUTPUT
 
       - name: 生成 tag 和 Release 名称
         id: vars
