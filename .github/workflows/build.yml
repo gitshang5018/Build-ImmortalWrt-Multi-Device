@@ -84,11 +84,7 @@ jobs:
 
       - name: 复制设备配置
         run: |
-          cp ${DEVICE}.config openwrt/.config
-
-      - name: 自动适配 WiFi 驱动
-        run: |
-          bash .github/scripts/auto_wifi.sh openwrt/.config $DEVICE
+          cp configs/${DEVICE}.config openwrt/.config
 
       - name: 自动适配网络加速（NSS / Shortcut-FE / FlowOffload）
         run: |
