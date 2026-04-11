@@ -86,7 +86,10 @@ jobs:
           echo "src-git openclash https://github.com/vernesong/OpenClash" >> feeds.conf.default
           echo "src-git design https://github.com/papagaye744/luci-theme-design" >> feeds.conf.default
           echo "src-git lucky https://github.com/gdy666/luci-app-lucky" >> feeds.conf.default
-          ./scripts/feeds update -a
+          echo "src-git unblockneteasemusic https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic" >> feeds.conf.default
+          ./scripts/feeds update -a && rm -rf feeds/luci/applications/luci-app-mosdns
+          rm -rf feeds/packages/net/{alist,adguardhome,mosdns,xray*,v2ray*,sing*,smartdns} feeds/packages/utils/v2dat feeds/packages/lang/golang
+          git clone https://github.com/kenzok8/golang -b 1.26 feeds/packages/lang/golang
           ./scripts/feeds install -a
 
       - name: 复制设备配置
