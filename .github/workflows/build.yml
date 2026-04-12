@@ -132,9 +132,9 @@ jobs:
           
           ./scripts/feeds update -a 
           
-          # 【核心修复】删除官方自带的 Golang，替换为 sbwml 维护的兼容版本
+          # 【核心修复】删除官方自带的 Golang，替换为 kenzok8 维护的 1.26 超前版本
           rm -rf feeds/packages/lang/golang
-          git clone https://github.com/sbwml/packages_lang_golang -b 23.x feeds/packages/lang/golang
+          git clone https://github.com/kenzok8/golang -b 1.26 feeds/packages/lang/golang
           
           # 优先强制安装自定义源的关键包
           ./scripts/feeds install -p mosdns -f luci-app-mosdns
