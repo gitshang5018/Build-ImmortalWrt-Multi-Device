@@ -197,6 +197,9 @@ jobs:
         run: |
           mkdir -p artifact/${DEVICE}
           cp -rf openwrt/bin/targets/*/* artifact/${DEVICE}/
+          # 仅保留固件相关文件，排除插件包
+          find artifact/${DEVICE}/ -name "*.ipk" -o -name "*.apk" -delete
+          rm -rf artifact/${DEVICE}/packages
 
       - name: 解析构建日志
         working-directory: openwrt

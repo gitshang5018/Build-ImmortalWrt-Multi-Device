@@ -72,6 +72,8 @@ jobs:
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: ${{ steps.vars.outputs.name }}
+          make_latest: true
+          prerelease: false
           body: |
             ## 📦 设备：${{ env.DEVICE }}
 
@@ -85,7 +87,6 @@ jobs:
             - 固件文件
             - build_info.txt
             - manifest / buildinfo
-            - 所有 ipk 插件包（如有）
 
           files: |
             firmware/**
