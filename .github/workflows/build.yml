@@ -119,7 +119,7 @@ jobs:
       - name: 编译固件
         working-directory: openwrt
         run: |
-          make -j$(nproc) || make -j1 V=s
+          make -j$(nproc) 2>&1 | tee build.log || make -j1 V=s 2>&1 | tee -a build.log
 
       - name: 打包固件
         run: |
