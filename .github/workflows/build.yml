@@ -26,7 +26,7 @@ jobs:
     env:
       DEVICE: ${{ matrix.device }}
       GO111MODULE: on
-      GOPROXY: https://goproxy.io,direct
+      GOPROXY: direct
 
     steps:
       - name: 检出仓库
