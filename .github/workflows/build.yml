@@ -207,6 +207,15 @@ jobs:
           cp $GITHUB_WORKSPACE/.github/scripts/mtwifi-init package/base-files/files/etc/init.d/mtwifi-init
           chmod +x package/base-files/files/etc/init.d/mtwifi-init
 
+      - name: 修复 AX6600 (RE-CS-02) 缺少 factory 固件问题
+        if: matrix.id == 'ax6600'
+        working-directory: openwrt
+        run: |
+          # 默认源码针对 jdcloud_re-cs-02 未生成 factory 镜像，这里通过 awk 注入仅生成 factory.bin 格式的配置
+          if [ -f "target/linux/qualcommax/image/ipq60xx.mk" ]; then
+            awk '/define Device\/jdcloud_re-cs-02/{flag=1} /DEVICE_PACKAGES/{if(flag) {print; print "\tKERNEL_IN_UBI := 1"; print "\tIMAGES += factory.bin"; print "\tIMAGE/factory.bin := append-ubi"; flag=0; next}} 1' target/linux/qualcommax/image/ipq60xx.mk > temp.mk && mv temp.mk target/linux/qualcommax/image/ipq60xx.mk
+          fi
+
       - name: 生成最终配置
         working-directory: openwrt
         run: |
