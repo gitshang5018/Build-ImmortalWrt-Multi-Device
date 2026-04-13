@@ -14,9 +14,23 @@ if [ -z "$VERSION" ] && [ -f "version.txt" ]; then
   VERSION=$(cat version.txt | tr -d '\r\n' || true)
 fi
 
-# 2. 尝试从 .config 提取信息
+# 2. 尝试使用官方脚本获取版本号 (ImmortalWrt/OpenWrt 标准)
+if [ -z "$VERSION" ] || [ "$VERSION" = "%V" ]; then
+  if [ -x "scripts/getver.sh" ]; then
+    VERSION=$(./scripts/getver.sh 2>/dev/null || true)
+  fi
+fi
+
+# 3. 尝试从 include/version.mk 提取
+if [ -z "$VERSION" ] || [ "$VERSION" = "%V" ]; then
+  if [ -f "include/version.mk" ]; then
+    VERSION=$(grep "VERSION_NUMBER:=" include/version.mk | cut -d'=' -f2 | xargs || true)
+  fi
+fi
+
+# 4. 尝试从 .config 提取信息
 if [ -f ".config" ]; then
-  [ -z "$VERSION" ] && VERSION=$(grep "CONFIG_VERSION_NUMBER=" .config | cut -d'=' -f2 | tr -d '"' || true)
+  [ -z "$VERSION" ] || [ "$VERSION" = "%V" ] && VERSION=$(grep "CONFIG_VERSION_NUMBER=" .config | cut -d'=' -f2 | tr -d '"' || true)
   BOARD=$(grep "CONFIG_TARGET_BOARD=" .config | cut -d'=' -f2 | tr -d '"' || true)
   SUBTARGET=$(grep "CONFIG_TARGET_SUBTARGET=" .config | cut -d'=' -f2 | tr -d '"' || true)
   [ -n "$BOARD" ] && TARGET="${BOARD}/${SUBTARGET}"
@@ -26,8 +40,9 @@ fi
 # 3. 从日志文件提取（作为备份或补充）
 if [ -f "$LOG_FILE" ]; then
   # 固件版本：优化正则，匹配 "ImmortalWrt" 后接版本号的情况
-  if [ -z "$VERSION" ] || [ "$VERSION" = "unknown" ] || [ "$VERSION" = "未知" ]; then
-    VERSION=$(grep -m1 "ImmortalWrt [0-9]" "$LOG_FILE" | sed 's/.*ImmortalWrt //' || true)
+  # 如果版本号是 %V（OpenWrt 默认占位符）或 未知，则尝试从日志继续提取
+  if [ -z "$VERSION" ] || [ "$VERSION" = "unknown" ] || [ "$VERSION" = "未知" ] || [ "$VERSION" = "%V" ]; then
+    VERSION=$(grep -m1 "ImmortalWrt [0-9]" "$LOG_FILE" | sed 's/.*ImmortalWrt //' | xargs || true)
   fi
   # 内核版本：如果 .config 没找到，尝试从日志找
   if [ -z "$KERNEL" ]; then
