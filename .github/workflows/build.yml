@@ -162,17 +162,20 @@ jobs:
           echo "src-git mosdns https://github.com/sbwml/luci-app-mosdns" >> feeds.conf.default
           echo "src-git openclash https://github.com/vernesong/OpenClash" >> feeds.conf.default
           echo "src-git lucky https://github.com/gdy666/luci-app-lucky" >> feeds.conf.default
-          # 注意：这里已经删除了 design 的 echo
           
           ./scripts/feeds update -a 
           
-          # 【修复 1】替换 Golang 为 1.26 超前版本
+          # 【修复1】替换 Golang 为 1.26 超前版本
           rm -rf feeds/packages/lang/golang
           git clone https://github.com/kenzok8/golang -b 1.26 feeds/packages/lang/golang
           
-          # 【修复 2】引入预编译的 Node.js，跳过源码编译噩梦
+          # 【修复2】引入预编译的 Node.js，跳过源码编译噩梦
           rm -rf feeds/packages/lang/node
           git clone https://github.com/sbwml/feeds_packages_lang_node-prebuilt feeds/packages/lang/node
+          
+          # 【关键】替换 golang/node 后必须重新注册这些包
+          ./scripts/feeds install -p packages -f golang
+          ./scripts/feeds install -p packages -f node
           
           # 优先强制安装自定义源的关键包
           ./scripts/feeds install -p mosdns -f luci-app-mosdns
@@ -182,10 +185,10 @@ jobs:
           # 批量安装剩余包 (期间出现的 WARNING 直接无视即可)
           ./scripts/feeds install -a
           
-          # 【完美修复】将网易云插件直接放进 package 目录
+          # 【完美修复】将网易云插件直接放入 package 目录
           git clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic package/luci-app-unblockneteasemusic
           
-          # 【完美修复】将 Design 主题也直接放进 package 目录
+          # 【完美修复】将 Design 主题也直接放入 package 目录
           git clone https://github.com/papagaye744/luci-theme-design package/luci-theme-design
 
       - name: 复制设备配置
@@ -244,13 +247,13 @@ jobs:
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
           
-      - name: 预编译易冲突的 Go 软件包 (解决多线程并发写入缓存报错)
+      - name: 预编译易冲突的软件包 (解决多线程并发写入缓存报错)
         working-directory: openwrt
         run: |
           echo "=== 1. 编译基础 Host Tools ==="
           make tools/compile -j$(nproc)
           
-          echo "=== 2. 编译交叉编译链 Toolchain (彻底解决 libgcc 找不到的问题) ==="
+          echo "=== 2. 编译交叉编译器 Toolchain (彻底解决 libgcc 找不到的问题) ==="
           make toolchain/compile -j$(nproc)
           
           echo "=== 3. 开始单独预编译 mosdns ==="
@@ -258,6 +261,9 @@ jobs:
           
           echo "=== 4. 开始单独预编译 xray-core ==="
           make package/feeds/helloworld/xray-core/compile -j1 V=s
+          
+          echo "=== 5. 预编译 node (luci-app-unblockneteasemusic 依赖) ==="
+          make package/feeds/packages/node/compile -j1 V=s
           
       - name: 编译固件 (防卡死与精准日志抓取)
         working-directory: openwrt
