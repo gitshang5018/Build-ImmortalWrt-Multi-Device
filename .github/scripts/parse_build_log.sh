@@ -5,19 +5,28 @@ OUT_FILE="$2"
 
 echo "解析构建信息..."
 
-# 1. 尝试从 .config 提取信息
-if [ -f ".config" ]; then
-  [ -z "$VERSION" ] && VERSION=$(grep "CONFIG_VERSION_NUMBER=" .config | cut -d'=' -f2 | tr -d '"' || true)
-  BOARD=$(grep "CONFIG_TARGET_BOARD=" .config | cut -d'=' -f2 | tr -d '"' || true)
-  SUBTARGET=$(grep "CONFIG_TARGET_SUBTARGET=" .config | cut -d'=' -f2 | tr -d '"' || true)
-  [ -n "$BOARD" ] && TARGET="${BOARD}/${SUBTARGET}"
-  [ -z "$KERNEL" ] && KERNEL=$(grep "CONFIG_LINUX_VERSION=" .config | cut -d'=' -f2 | tr -d '"' || true)
+# 1. 尝试从源文件提取版本信息 (最准确)
+if [ -f "openwrt/package/base-files/files/etc/openwrt_release" ]; then
+  VERSION=$(grep "DISTRIB_RELEASE=" openwrt/package/base-files/files/etc/openwrt_release | cut -d"'" -f2 || true)
 fi
 
-# 2. 从日志文件提取（作为备份或补充）
+if [ -z "$VERSION" ] && [ -f "openwrt/version.txt" ]; then
+  VERSION=$(cat openwrt/version.txt | tr -d '\r\n' || true)
+fi
+
+# 2. 尝试从 .config 提取信息
+if [ -f "openwrt/.config" ]; then
+  [ -z "$VERSION" ] && VERSION=$(grep "CONFIG_VERSION_NUMBER=" openwrt/.config | cut -d'=' -f2 | tr -d '"' || true)
+  BOARD=$(grep "CONFIG_TARGET_BOARD=" openwrt/.config | cut -d'=' -f2 | tr -d '"' || true)
+  SUBTARGET=$(grep "CONFIG_TARGET_SUBTARGET=" openwrt/.config | cut -d'=' -f2 | tr -d '"' || true)
+  [ -n "$BOARD" ] && TARGET="${BOARD}/${SUBTARGET}"
+  [ -z "$KERNEL" ] && KERNEL=$(grep "CONFIG_LINUX_VERSION=" openwrt/.config | cut -d'=' -f2 | tr -d '"' || true)
+fi
+
+# 3. 从日志文件提取（作为备份或补充）
 if [ -f "$LOG_FILE" ]; then
-  # 固件版本：优化正则，匹配 "ImmortalWrt" 后接版本号的情况，避免匹配到包含路径的日志行
-  if [ -z "$VERSION" ] || [ "$VERSION" = "unknown" ]; then
+  # 固件版本：优化正则，匹配 "ImmortalWrt" 后接版本号的情况
+  if [ -z "$VERSION" ] || [ "$VERSION" = "unknown" ] || [ "$VERSION" = "未知" ]; then
     VERSION=$(grep -m1 "ImmortalWrt [0-9]" "$LOG_FILE" | sed 's/.*ImmortalWrt //' || true)
   fi
   # 内核版本：如果 .config 没找到，尝试从日志找
