@@ -207,13 +207,20 @@ jobs:
           cp $GITHUB_WORKSPACE/.github/scripts/mtwifi-init package/base-files/files/etc/init.d/mtwifi-init
           chmod +x package/base-files/files/etc/init.d/mtwifi-init
 
-      - name: 修复 AX6600 (RE-CS-02) 缺少 factory 固件问题
-        if: matrix.id == 'ax6600'
+      - name: 修复 京东云设备 (AX6600 / AX1800) 缺少 factory 固件问题
+        if: matrix.id == 'ax6600' || matrix.id == 'jdc_ax1800'
         working-directory: openwrt
         run: |
-          # 默认源码针对 jdcloud_re-cs-02 未生成 factory 镜像，这里通过 awk 注入仅生成 factory.bin 格式的配置
+          # 建立 matrix.id 到源码设备 ID 的映射
+          case "${{ matrix.id }}" in
+            "ax6600") TARGET_ID="jdcloud_re-cs-02" ;;
+            "jdc_ax1800") TARGET_ID="jdcloud_re-ss-01" ;;
+          esac
+          
+          echo "正在为 ${TARGET_ID} 修复 factory.bin 生成配置..."
+          
           if [ -f "target/linux/qualcommax/image/ipq60xx.mk" ]; then
-            awk '/define Device\/jdcloud_re-cs-02/{flag=1} /DEVICE_PACKAGES/{if(flag) {print; print "\tKERNEL_IN_UBI := 1"; print "\tIMAGES += factory.bin"; print "\tIMAGE/factory.bin := append-ubi"; flag=0; next}} 1' target/linux/qualcommax/image/ipq60xx.mk > temp.mk && mv temp.mk target/linux/qualcommax/image/ipq60xx.mk
+            awk -v tid="${TARGET_ID}" '$0 ~ "define Device/"tid {flag=1} /DEVICE_PACKAGES/{if(flag) {print; print "\tKERNEL_IN_UBI := 1"; print "\tIMAGES += factory.bin"; print "\tIMAGE/factory.bin := append-ubi"; flag=0; next}} 1' target/linux/qualcommax/image/ipq60xx.mk > temp.mk && mv temp.mk target/linux/qualcommax/image/ipq60xx.mk
           fi
 
       - name: 生成最终配置
