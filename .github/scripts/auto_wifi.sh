@@ -33,22 +33,28 @@ CONFIG_PACKAGE_ath10k-firmware-qca4019-ct=y
 EOF
     ;;
 
-  ax6600|jdc_ax1800)
-    echo "→ IPQ60xx: 启用 ath11k 运行环境与固件"
+  ax6600)
+    echo "→ IPQ60xx 三频 (AX6600): 启用 ath11k + AHB + PCI 驱动"
     cat >> "$CONFIG_FILE" <<EOF
+# ath11k 核心 + AHB 总线驱动（内置 2.4G/5G 射频）
 CONFIG_PACKAGE_kmod-ath11k=y
 CONFIG_PACKAGE_kmod-ath11k-ahb=y
-CONFIG_PACKAGE_kmod-ath11k-pci=y
 CONFIG_PACKAGE_ath11k-firmware-ipq6018=y
-CONFIG_PACKAGE_kmod-qrtr=y
-CONFIG_PACKAGE_kmod-qrtr-mhi=y
-CONFIG_PACKAGE_kmod-qrtr-tun=y
+
+# PCIe 第三射频（QCN9074 5G Gaming 频段）
+CONFIG_PACKAGE_kmod-ath11k-pci=y
+CONFIG_PACKAGE_ath11k-firmware-qcn9074=y
 EOF
-    if [ "$DEVICE" == "jdc_ax1800" ]; then
-      echo "CONFIG_PACKAGE_ipq-wifi-jdc_ax1800=y" >> "$CONFIG_FILE"
-    else
-      echo "CONFIG_PACKAGE_ipq-wifi-jdcloud_ax6600=y" >> "$CONFIG_FILE"
-    fi
+    ;;
+
+  jdc_ax1800)
+    echo "→ IPQ60xx 双频 (AX1800): 启用 ath11k + AHB 驱动"
+    cat >> "$CONFIG_FILE" <<EOF
+# ath11k 核心 + AHB 总线驱动（内置 2.4G/5G 射频）
+CONFIG_PACKAGE_kmod-ath11k=y
+CONFIG_PACKAGE_kmod-ath11k-ahb=y
+CONFIG_PACKAGE_ath11k-firmware-ipq6018=y
+EOF
     ;;
 
   n5105|wyse3040)
