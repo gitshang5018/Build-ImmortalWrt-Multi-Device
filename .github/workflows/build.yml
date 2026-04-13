@@ -9,13 +9,13 @@ on:
         default: 'all'
         type: choice
         options:
-          - all
-          - n5105
-          - wyse3040
-          - mt7621
-          - r619ac
-          - ax6600
-          - jdc_ax1800
+          - 'all | 全部编译'
+          - 'n5105 | X86'
+          - 'wyse3040 | wyse3040'
+          - 'mt7621 | 歌华链'
+          - 'r619ac | 竞斗云2.0'
+          - 'ax6600 | 雅典娜AX6600'
+          - 'jdc_ax1800 | 亚瑟AX1800'
 
 permissions:
   contents: write
@@ -35,7 +35,9 @@ jobs:
           # 格式：ID|中文名
           DEVICES=("n5105|X86" "wyse3040|wyse3040" "mt7621|歌华链" "r619ac|竞斗云2.0" "ax6600|雅典娜AX6600" "jdc_ax1800|亚瑟AX1800")
           
-          SELECTED="${{ github.event.inputs.build_device }}"
+          SELECTED_RAW="${{ github.event.inputs.build_device }}"
+          SELECTED="${SELECTED_RAW%% | *}"
+          
           JSON="["
           for item in "${DEVICES[@]}"; do
             ID="${item%%|*}"
