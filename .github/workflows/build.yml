@@ -131,6 +131,8 @@ jobs:
       - name: 拉取 ImmortalWrt 源码
         run: |
           git clone https://github.com/immortalwrt/immortalwrt.git openwrt
+          # 修改默认 IP 为 10.10.10.1
+          sed -i 's/192.168.1.1/10.10.10.1/g' openwrt/package/base-files/files/bin/config_generate
 
       - name: 配置缓存
         uses: actions/cache@v4
@@ -199,13 +201,13 @@ jobs:
         run: |
           bash .github/scripts/auto_turboacc.sh openwrt/.config $DEVICE
 
-      - name: 注入 MT7621 WiFi 启动修复脚本
+      - name: 注入 MT7621 初始化配置脚本
         if: matrix.id == 'mt7621'
         working-directory: openwrt
         run: |
-          mkdir -p package/base-files/files/etc/init.d
-          cp $GITHUB_WORKSPACE/.github/scripts/mtwifi-init package/base-files/files/etc/init.d/mtwifi-init
-          chmod +x package/base-files/files/etc/init.d/mtwifi-init
+          mkdir -p package/base-files/files/etc/uci-defaults
+          cp $GITHUB_WORKSPACE/.github/scripts/99-gehua-init package/base-files/files/etc/uci-defaults/99-gehua-init
+          chmod +x package/base-files/files/etc/uci-defaults/99-gehua-init
 
       - name: 修复 京东云设备 (AX6600 / AX1800) 缺少 factory 固件问题
         if: matrix.id == 'ax6600' || matrix.id == 'jdc_ax1800'
@@ -220,7 +222,8 @@ jobs:
           echo "正在为 ${TARGET_ID} 修复 factory.bin 生成配置..."
           
           if [ -f "target/linux/qualcommax/image/ipq60xx.mk" ]; then
-            awk -v tid="${TARGET_ID}" '$0 ~ "define Device/"tid {flag=1} /DEVICE_PACKAGES/{if(flag) {print; print "\tKERNEL_IN_UBI := 1"; print "\tIMAGES += factory.bin"; print "\tIMAGE/factory.bin := append-ubi"; flag=0; next}} 1' target/linux/qualcommax/image/ipq60xx.mk > temp.mk && mv temp.mk target/linux/qualcommax/image/ipq60xx.mk
+            # 修正：京东云 AX6600/AX1800 是 eMMC 设备，不能使用 append-ubi (NAND)，改用 Device/EmmcImage
+            awk -v tid="${TARGET_ID}" '$0 ~ "define Device/"tid {flag=1} /DEVICE_PACKAGES/{if(flag) {print; print "\t$(call Device/EmmcImage)"; print "\tIMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-rootfs | append-metadata"; flag=0; next}} 1' target/linux/qualcommax/image/ipq60xx.mk > temp.mk && mv temp.mk target/linux/qualcommax/image/ipq60xx.mk
           fi
 
       - name: 生成最终配置

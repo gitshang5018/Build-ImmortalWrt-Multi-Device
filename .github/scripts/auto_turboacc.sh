@@ -9,10 +9,12 @@ echo "自动适配网络加速 for $DEVICE"
 case "$DEVICE" in
 
   mt7621)
-    echo "→ MT7621: 启用 FlowOffload + FullCone"
+    echo "→ MT7621: 启用 HW NAT (mtk-hnat) + FlowOffload"
     cat >> "$CONFIG_FILE" <<EOF
+CONFIG_PACKAGE_kmod-mtk-hnat=y
 CONFIG_PACKAGE_luci-app-turboacc=y
 CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOAD=y
+CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_HW_OFFLOAD=y
 CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_FULLCONENAT=y
 EOF
     ;;

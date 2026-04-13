@@ -1,0 +1,40 @@
+#!/bin/sh
+
+# 歌华链 GHL 首次启动初始化脚本
+# 路径: /etc/uci-defaults/99-gehua-init
+
+# 1. 自动将无线接口加入 LAN 网桥 (针对 MT7621 闭源驱动)
+# 默认情况下由于使用了闭源驱动，接口名为 ra0 (2.4G) 和 rai0 (5G)
+lan_if=$(uci -q get network.lan.device)
+
+# 适配新版本 OpenWrt (21.02+) 的 bridge 模式
+if [ -n "$lan_if" ]; then
+    # 如果是 bridge 模式
+    uci -q del_list network.lan.ports='ra0'
+    uci -q del_list network.lan.ports='rai0'
+    uci add_list network.lan.ports='ra0'
+    uci add_list network.lan.ports='rai0'
+else
+    # 兼容旧版本 ifname 模式
+    lan_ifname=$(uci -q get network.lan.ifname)
+    if [ -n "$lan_ifname" ] && ! echo "$lan_ifname" | grep -q "ra0"; then
+        uci set network.lan.ifname="$lan_ifname ra0 rai0"
+    fi
+fi
+
+# 2. 设置默认无线名称 (可选，方便用户找信号)
+uci set wireless.default_radio0.ssid='ImmortalWrt_2.4G'
+uci set wireless.default_radio1.ssid='ImmortalWrt_5G'
+uci set wireless.default_radio0.encryption='none'
+uci set wireless.default_radio1.encryption='none'
+
+# 3. 开启硬件 NAT 加速 (HNAT) 基础配置
+uci set firewall.@defaults[0].flow_offload='1'
+uci set firewall.@defaults[0].fullcone='1'
+
+uci commit network
+uci commit wireless
+uci commit firewall
+
+# 脚本执行完毕会自动删除自己，只运行一次
+exit 0
