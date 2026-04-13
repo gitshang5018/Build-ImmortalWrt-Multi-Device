@@ -174,7 +174,16 @@ jobs:
           make download -j8 || make download -j1 V=s
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
-
+          
+      - name: 预编译易冲突的 Go 软件包 (解决多线程并发写入缓存报错)
+        working-directory: openwrt
+        run: |
+          echo "=== 开始单独预编译 mosdns ==="
+          make package/feeds/mosdns/mosdns/compile -j1 V=s
+          
+          echo "=== 开始单独预编译 xray-core ==="
+          make package/feeds/helloworld/xray-core/compile -j1 V=s
+          
       - name: 编译固件 (防卡死与精准日志抓取)
         working-directory: openwrt
         run: |
