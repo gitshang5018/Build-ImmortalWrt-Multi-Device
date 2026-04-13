@@ -32,24 +32,33 @@ jobs:
       - name: 生成设备列表
         id: set-matrix
         run: |
-          if [ "${{ github.event.inputs.build_device }}" == "" ] || [ "${{ github.event.inputs.build_device }}" == "all" ]; then
-            echo 'matrix=["n5105", "wyse3040", "mt7621", "r619ac", "ax6600", "jdc_ax1800"]' >> $GITHUB_OUTPUT
-          else
-            echo "matrix=[\"${{ github.event.inputs.build_device }}\"]" >> $GITHUB_OUTPUT
-          fi
+          # 格式：ID|中文名
+          DEVICES=("n5105|X86" "wyse3040|wyse3040" "mt7621|歌华链" "r619ac|竞斗云2.0" "ax6600|雅典娜AX6600" "jdc_ax1800|亚瑟AX1800")
+          
+          SELECTED="${{ github.event.inputs.build_device }}"
+          JSON="["
+          for item in "${DEVICES[@]}"; do
+            ID="${item%%|*}"
+            NAME="${item##*|}"
+            if [ "$SELECTED" == "all" ] || [ "$SELECTED" == "$ID" ]; then
+              JSON+="{\"id\":\"$ID\",\"name\":\"$NAME\"},"
+            fi
+          done
+          JSON="${JSON%,}]"
+          echo "matrix=$JSON" >> $GITHUB_OUTPUT
 
   build:
-    name: 编译固件 - ${{ matrix.device }}
+    name: 编译固件 - ${{ matrix.name }}
     needs: prepare_matrix
     runs-on: ubuntu-22.04
 
     strategy:
       fail-fast: false
       matrix:
-        device: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
+        include: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
 
     env:
-      DEVICE: ${{ matrix.device }}
+      DEVICE: ${{ matrix.id }}
       GO111MODULE: on
       GOPROXY: https://proxy.golang.org,direct
 
@@ -258,8 +267,8 @@ jobs:
       - name: 上传固件
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.device }}_firmware
-          path: artifact/${{ matrix.device }}/
+          name: ${{ matrix.id }}_firmware
+          path: artifact/${{ matrix.id }}/
 
       - name: 清理旧 Release
         if: github.ref == 'refs/heads/main'
@@ -279,4 +288,4 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             https://api.github.com/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches \
-            -d '{"ref":"main","inputs":{"device":"${{ matrix.device }}","run_id":"${{ github.run_id }}"}}'
+            -d '{"ref":"main","inputs":{"device":"${{ matrix.id }}","device_name":"${{ matrix.name }}","run_id":"${{ github.run_id }}"}}'

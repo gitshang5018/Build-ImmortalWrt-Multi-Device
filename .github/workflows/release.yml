@@ -6,14 +6,11 @@ on:
       device:
         description: "选择要发布的设备"
         required: true
-        type: choice
-        options:
-          - n5105
-          - wyse3040
-          - mt7621
-          - r619ac
-          - ax6600
-          - jdc_ax1800
+        type: string
+      device_name:
+        description: "设备中文名称"
+        required: false
+        type: string
       run_id:
         description: "构建工作流的 Run ID（自动触发时传入）"
         required: true
@@ -28,6 +25,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       DEVICE: ${{ inputs.device }}
+      DEVICE_NAME: ${{ inputs.device_name || inputs.device }}
 
     steps:
       - name: 下载构建产物
@@ -64,8 +62,8 @@ jobs:
           
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           
-          # Release 名称可以包含空格，所以这里不做限制
-          echo "name=固件发布 - ${DEVICE} - ${{ steps.info.outputs.date }}" >> $GITHUB_OUTPUT
+          # Release 名称优先使用中文名
+          echo "name=固件发布 - ${DEVICE_NAME} - ${{ steps.info.outputs.date }}" >> $GITHUB_OUTPUT
 
       - name: 创建 Release
         uses: softprops/action-gh-release@v2
@@ -75,7 +73,7 @@ jobs:
           make_latest: true
           prerelease: false
           body: |
-            ## 📦 设备：${{ env.DEVICE }}
+            ## 📦 设备：${{ env.DEVICE_NAME }}
 
             ### 🔧 构建信息
             - 固件版本：${{ steps.info.outputs.version }}
