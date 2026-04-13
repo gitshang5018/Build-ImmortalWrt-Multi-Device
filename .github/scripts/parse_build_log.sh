@@ -6,21 +6,21 @@ OUT_FILE="$2"
 echo "解析构建信息..."
 
 # 1. 尝试从源文件提取版本信息 (最准确)
-if [ -f "openwrt/package/base-files/files/etc/openwrt_release" ]; then
-  VERSION=$(grep "DISTRIB_RELEASE=" openwrt/package/base-files/files/etc/openwrt_release | cut -d"'" -f2 || true)
+if [ -f "package/base-files/files/etc/openwrt_release" ]; then
+  VERSION=$(grep "DISTRIB_RELEASE=" package/base-files/files/etc/openwrt_release | cut -d"'" -f2 || true)
 fi
 
-if [ -z "$VERSION" ] && [ -f "openwrt/version.txt" ]; then
-  VERSION=$(cat openwrt/version.txt | tr -d '\r\n' || true)
+if [ -z "$VERSION" ] && [ -f "version.txt" ]; then
+  VERSION=$(cat version.txt | tr -d '\r\n' || true)
 fi
 
 # 2. 尝试从 .config 提取信息
-if [ -f "openwrt/.config" ]; then
-  [ -z "$VERSION" ] && VERSION=$(grep "CONFIG_VERSION_NUMBER=" openwrt/.config | cut -d'=' -f2 | tr -d '"' || true)
-  BOARD=$(grep "CONFIG_TARGET_BOARD=" openwrt/.config | cut -d'=' -f2 | tr -d '"' || true)
-  SUBTARGET=$(grep "CONFIG_TARGET_SUBTARGET=" openwrt/.config | cut -d'=' -f2 | tr -d '"' || true)
+if [ -f ".config" ]; then
+  [ -z "$VERSION" ] && VERSION=$(grep "CONFIG_VERSION_NUMBER=" .config | cut -d'=' -f2 | tr -d '"' || true)
+  BOARD=$(grep "CONFIG_TARGET_BOARD=" .config | cut -d'=' -f2 | tr -d '"' || true)
+  SUBTARGET=$(grep "CONFIG_TARGET_SUBTARGET=" .config | cut -d'=' -f2 | tr -d '"' || true)
   [ -n "$BOARD" ] && TARGET="${BOARD}/${SUBTARGET}"
-  [ -z "$KERNEL" ] && KERNEL=$(grep "CONFIG_LINUX_VERSION=" openwrt/.config | cut -d'=' -f2 | tr -d '"' || true)
+  [ -z "$KERNEL" ] && KERNEL=$(grep "CONFIG_LINUX_VERSION=" .config | cut -d'=' -f2 | tr -d '"' || true)
 fi
 
 # 3. 从日志文件提取（作为备份或补充）
