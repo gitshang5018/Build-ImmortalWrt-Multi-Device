@@ -139,9 +139,9 @@ jobs:
             openwrt/.ccache
             openwrt/staging_dir/host*
             openwrt/staging_dir/toolchain-*
-          key: ${{ runner.os }}-${{ matrix.device }}-${{ github.sha }}
+          key: ${{ runner.os }}-${{ matrix.device }}-v2-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.device }}-
+            ${{ runner.os }}-${{ matrix.device }}-v2-
 
       - name: 设置 CCache
         run: |
@@ -226,13 +226,16 @@ jobs:
       - name: 预编译易冲突的 Go 软件包 (解决多线程并发写入缓存报错)
         working-directory: openwrt
         run: |
-          echo "=== 1. 先编译基础 Host Tools (提供 sed 等交叉编译基础环境) ==="
+          echo "=== 1. 编译基础 Host Tools ==="
           make tools/compile -j$(nproc)
           
-          echo "=== 2. 开始单独预编译 mosdns ==="
+          echo "=== 2. 编译交叉编译链 Toolchain (彻底解决 libgcc 找不到的问题) ==="
+          make toolchain/compile -j$(nproc)
+          
+          echo "=== 3. 开始单独预编译 mosdns ==="
           make package/feeds/mosdns/mosdns/compile -j1 V=s
           
-          echo "=== 3. 开始单独预编译 xray-core ==="
+          echo "=== 4. 开始单独预编译 xray-core ==="
           make package/feeds/helloworld/xray-core/compile -j1 V=s
           
       - name: 编译固件 (防卡死与精准日志抓取)
