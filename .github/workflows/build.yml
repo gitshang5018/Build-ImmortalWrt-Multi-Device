@@ -163,6 +163,7 @@ jobs:
           echo "src-git openclash https://github.com/vernesong/OpenClash" >> feeds.conf.default
           echo "src-git lucky https://github.com/gdy666/luci-app-lucky" >> feeds.conf.default
           
+          # 1. 初始更新
           ./scripts/feeds update -a 
           
           # 【修复1】替换 Golang 为 1.26 超前版本
@@ -173,22 +174,17 @@ jobs:
           rm -rf feeds/packages/lang/node
           git clone https://github.com/sbwml/feeds_packages_lang_node-prebuilt feeds/packages/lang/node
           
-          # 【关键】替换 golang/node 后必须重新注册这些包
-          ./scripts/feeds install -p packages -f golang
-          ./scripts/feeds install -p packages -f node
-          
-          # 优先强制安装自定义源的关键包
-          ./scripts/feeds install -p mosdns -f luci-app-mosdns
-          ./scripts/feeds install -p mosdns -f mosdns
+          # 2. 关键：替换后必须重新 update 并强制 install 以注册 host 依赖
+          ./scripts/feeds update packages
+          ./scripts/feeds install -p packages -f golang node
+          ./scripts/feeds install -p mosdns -f luci-app-mosdns mosdns
           ./scripts/feeds install -p helloworld -f xray-core
           
-          # 批量安装剩余包 (期间出现的 WARNING 直接无视即可)
+          # 3. 批量安装剩余包
           ./scripts/feeds install -a
           
-          # 【完美修复】将网易云插件直接放入 package 目录
+          # 【完美修复】将网易云与主题直接放入 package 目录以获得最高优先级
           git clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic package/luci-app-unblockneteasemusic
-          
-          # 【完美修复】将 Design 主题也直接放入 package 目录
           git clone https://github.com/papagaye744/luci-theme-design package/luci-theme-design
 
       - name: 复制设备配置
@@ -211,59 +207,43 @@ jobs:
           cp $GITHUB_WORKSPACE/.github/scripts/mtwifi-init package/base-files/files/etc/init.d/mtwifi-init
           chmod +x package/base-files/files/etc/init.d/mtwifi-init
 
-      - name: 生成最终配置
-        working-directory: openwrt
-        run: make defconfig
-
-      - name: 自动清理无用依赖与冲突包
+      - name: 生成最终配置 (make defconfig)
         working-directory: openwrt
         run: |
-          echo "=== 检查并移除冲突/缺失的依赖项 ==="
-          # 1. 运行依赖检查，找出无法满足的包并自动禁用
+          # 显式声明非交互模式
           make defconfig
-          scripts/diffconfig.sh > /tmp/current.config
-          
-          # 2. 检测编译目标中不存在的包（feeds 安装失败的残留）
-          if make prepare V=s 2>&1 | grep -q "Package .* is missing dependencies"; then
-            echo "⚠️ 检测到依赖缺失，尝试自动修复..."
-            make defconfig
-          fi
-          
-          # 3. 确保 AUTOREMOVE 已启用（编译时自动裁剪未被引用的包）
+
+      - name: 自动清理冲突包并校验依赖
+        working-directory: openwrt
+        run: |
+          echo "=== 快速校验并自动移除无效依赖 ==="
+          # 确保关键包不被裁减
           grep -q "CONFIG_AUTOREMOVE=y" .config || echo "CONFIG_AUTOREMOVE=y" >> .config
           
-          # 4. 重新生成最终配置
+          # 再次确认配置完整性，不运行耗时的 make prepare
           make defconfig
-          echo "✅ 依赖清理完成"
+          echo "✅ 依赖清理完成 (快速模式)"
 
       - name: 下载依赖 (增加容错重试机制)
         working-directory: openwrt
         run: |
-          # 【关键修复】：强制清除可能已经被缓存下来的、损坏的 Go 模块文件夹！
           rm -rf dl/go-mod-cache
-          
-          # 然后再开始正常的下载流程
           make download -j8 || make download -j1 V=s
-          find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
           
-      - name: 预编译易冲突的软件包 (解决多线程并发写入缓存报错)
+      - name: 预编译关键软件 (确保依赖库完整性)
         working-directory: openwrt
         run: |
-          echo "=== 1. 编译基础 Host Tools ==="
+          echo "=== 1. 编译基础环境工具 ==="
           make tools/compile -j$(nproc)
-          
-          echo "=== 2. 编译交叉编译器 Toolchain (彻底解决 libgcc 找不到的问题) ==="
           make toolchain/compile -j$(nproc)
           
-          echo "=== 3. 开始单独预编译 mosdns ==="
+          echo "=== 2. 预编译核心插件 (单线程容错) ==="
+          # 注意：node 预编译包名为 node，但在 feeds 中路径可能不同
+          # 使用 || true 是为了防止预编译失败导致整个构建停止，主编译阶段会再次尝试
+          make package/feeds/packages/node/compile -j1 V=s || true
           make package/feeds/mosdns/mosdns/compile -j1 V=s
-          
-          echo "=== 4. 开始单独预编译 xray-core ==="
           make package/feeds/helloworld/xray-core/compile -j1 V=s
-          
-          echo "=== 5. 预编译 node (luci-app-unblockneteasemusic 依赖) ==="
-          make package/feeds/packages/node/compile -j1 V=s
           
       - name: 编译固件 (防卡死与精准日志抓取)
         working-directory: openwrt
