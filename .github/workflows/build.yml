@@ -22,7 +22,7 @@ permissions:
   actions: write
 
 jobs:
-  # 新增：准备设备矩阵，实现动态选择
+  # 准备设备矩阵，实现动态选择
   prepare_matrix:
     name: 解析设备参数
     runs-on: ubuntu-22.04
@@ -32,23 +32,20 @@ jobs:
       - name: 生成设备列表
         id: set-matrix
         run: |
-          # 如果选择了 all 或者没有输入（比如通过 API 触发），则输出包含所有设备的 JSON 数组
           if [ "${{ github.event.inputs.build_device }}" == "" ] || [ "${{ github.event.inputs.build_device }}" == "all" ]; then
             echo 'matrix=["n5105", "wyse3040", "mt7621", "r619ac", "ax6600", "jdc_ax1800"]' >> $GITHUB_OUTPUT
           else
-            # 如果选择了特定设备，则输出只包含该设备的 JSON 数组
             echo "matrix=[\"${{ github.event.inputs.build_device }}\"]" >> $GITHUB_OUTPUT
           fi
 
   build:
     name: 编译固件 - ${{ matrix.device }}
-    needs: prepare_matrix # 必须等待 prepare_matrix 执行完毕
+    needs: prepare_matrix
     runs-on: ubuntu-22.04
 
     strategy:
       fail-fast: false
       matrix:
-        # 接收上一个任务传递过来的动态数组
         device: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
 
     env:
@@ -60,7 +57,7 @@ jobs:
       - name: 检出仓库
         uses: actions/checkout@v4
 
-      - name: 设置 Go 1.25 环境 (替代官方脚本的 Go 安装)
+      - name: 设置 Go 1.25 环境
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
@@ -74,7 +71,7 @@ jobs:
           sudo apt -y autoremove --purge
           sudo apt clean
 
-      - name: 安装基础编译依赖 (同步官方脚本依赖列表)
+      - name: 安装基础编译依赖
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
@@ -90,7 +87,7 @@ jobs:
             sharutils squashfs-tools subversion swig texinfo uglifyjs unzip vim wget xmlto \
             zlib1g-dev zstd xxd libpython3.10-dev nodejs yarn gcc-multilib g++-multilib
 
-      - name: 安装特有编译工具 (同步官方脚本 padjffs2 / po2lmo / upx)
+      - name: 安装特有编译工具
         run: |
           TMP_DIR="$(mktemp -d)"
           pushd "$TMP_DIR"
@@ -108,7 +105,7 @@ jobs:
           strip "padjffs2"
           sudo cp -fp "padjffs2" "/usr/bin/padjffs2"
           
-          # 编译 po2lmo (LuCI 语言包工具)
+          # 编译 po2lmo
           git clone --filter=blob:none --no-checkout "https://github.com/openwrt/luci.git" "po2lmo"
           cd "po2lmo"
           git config core.sparseCheckout true
@@ -148,7 +145,7 @@ jobs:
           key: dl-${{ hashFiles('configs/*.config') }}
           restore-keys: dl-
 
-      - name: 更新 feeds (修复内部 Golang 与源优先级)
+      - name: 更新 feeds (修复 Golang、引入预编译 Node.js)
         working-directory: openwrt
         run: |
           echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.default
@@ -157,12 +154,18 @@ jobs:
           echo "src-git openclash https://github.com/vernesong/OpenClash" >> feeds.conf.default
           echo "src-git design https://github.com/papagaye744/luci-theme-design" >> feeds.conf.default
           echo "src-git lucky https://github.com/gdy666/luci-app-lucky" >> feeds.conf.default
+          # 重新加回网易云插件源
+          echo "src-git unblockneteasemusic https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic" >> feeds.conf.default
           
           ./scripts/feeds update -a 
           
-          # 【核心修复】删除官方自带的 Golang，替换为 kenzok8 维护的 1.26 超前版本
+          # 【修复 1】替换 Golang 为 1.26 超前版本
           rm -rf feeds/packages/lang/golang
           git clone https://github.com/kenzok8/golang -b 1.26 feeds/packages/lang/golang
+          
+          # 【修复 2】引入预编译的 Node.js，跳过源码编译噩梦！
+          rm -rf feeds/packages/lang/node
+          git clone https://github.com/sbwml/feeds_packages_lang_node-prebuilt feeds/packages/lang/node
           
           # 优先强制安装自定义源的关键包
           ./scripts/feeds install -p mosdns -f luci-app-mosdns
@@ -203,12 +206,11 @@ jobs:
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
           
-      - name: 预编译易冲突的 Go 软件包 (解决多线程并发写入缓存报错)
+      - name: 预编译易冲突的 Go 软件包
         working-directory: openwrt
         run: |
           echo "=== 开始单独预编译 mosdns ==="
           make package/feeds/mosdns/mosdns/compile -j1 V=s
-          
           echo "=== 开始单独预编译 xray-core ==="
           make package/feeds/helloworld/xray-core/compile -j1 V=s
           
@@ -216,15 +218,12 @@ jobs:
         working-directory: openwrt
         run: |
           echo "开始多线程编译..."
-          # 将所有输出重定向到文件，不在控制台显示，防止 GHA 日志超限卡死
           make -j$(nproc) > build.log 2>&1 || {
             echo "❌ 多线程编译失败，正在尝试单线程容错编译..."
             make -j1 V=s >> build.log 2>&1 || {
               echo "❌ 单线程编译也失败了！"
               echo "==================== 最后的 500 行报错日志 ===================="
-              # 只打印出最后 500 行日志，让你直接看清死因
               tail -n 500 build.log
-              # 强制退出并标记任务失败
               exit 1
             }
           }
@@ -234,7 +233,6 @@ jobs:
         run: |
           mkdir -p artifact/${DEVICE}
           cp -rf openwrt/bin/targets/*/* artifact/${DEVICE}/
-          # 仅保留固件相关文件，排除插件包
           find artifact/${DEVICE}/ -name "*.ipk" -o -name "*.apk" -delete
           rm -rf artifact/${DEVICE}/packages
 
