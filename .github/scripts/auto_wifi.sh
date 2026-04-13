@@ -34,11 +34,21 @@ EOF
     ;;
 
   ax6600|jdc_ax1800)
-    echo "→ IPQ60xx: 启用 ath11k 驱动"
+    echo "→ IPQ60xx: 启用 ath11k 运行环境与固件"
     cat >> "$CONFIG_FILE" <<EOF
 CONFIG_PACKAGE_kmod-ath11k=y
+CONFIG_PACKAGE_kmod-ath11k-ahb=y
+CONFIG_PACKAGE_kmod-ath11k-pci=y
 CONFIG_PACKAGE_ath11k-firmware-ipq6018=y
+CONFIG_PACKAGE_kmod-qrtr=y
+CONFIG_PACKAGE_kmod-qrtr-mhi=y
+CONFIG_PACKAGE_kmod-qrtr-tun=y
 EOF
+    if [ "$DEVICE" == "jdc_ax1800" ]; then
+      echo "CONFIG_PACKAGE_ipq-wifi-jdc_ax1800=y" >> "$CONFIG_FILE"
+    else
+      echo "CONFIG_PACKAGE_ipq-wifi-jdcloud_ax6600=y" >> "$CONFIG_FILE"
+    fi
     ;;
 
   n5105|wyse3040)
