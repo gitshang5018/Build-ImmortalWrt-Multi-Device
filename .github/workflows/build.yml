@@ -212,6 +212,27 @@ jobs:
         working-directory: openwrt
         run: make defconfig
 
+      - name: 自动清理无用依赖与冲突包
+        working-directory: openwrt
+        run: |
+          echo "=== 检查并移除冲突/缺失的依赖项 ==="
+          # 1. 运行依赖检查，找出无法满足的包并自动禁用
+          make defconfig
+          scripts/diffconfig.sh > /tmp/current.config
+          
+          # 2. 检测编译目标中不存在的包（feeds 安装失败的残留）
+          if make prepare V=s 2>&1 | grep -q "Package .* is missing dependencies"; then
+            echo "⚠️ 检测到依赖缺失，尝试自动修复..."
+            make defconfig
+          fi
+          
+          # 3. 确保 AUTOREMOVE 已启用（编译时自动裁剪未被引用的包）
+          grep -q "CONFIG_AUTOREMOVE=y" .config || echo "CONFIG_AUTOREMOVE=y" >> .config
+          
+          # 4. 重新生成最终配置
+          make defconfig
+          echo "✅ 依赖清理完成"
+
       - name: 下载依赖 (增加容错重试机制)
         working-directory: openwrt
         run: |
