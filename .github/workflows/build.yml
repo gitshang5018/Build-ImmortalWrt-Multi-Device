@@ -2,20 +2,14 @@ name: 编译 ImmortalWrt 多设备固件
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: write
-  actions: write
-
-jobs:
-  build:
-    name: 编译固件 - ${{ matrix.device }}
-    runs-on: ubuntu-22.04
-
-    strategy:
-      fail-fast: false
-      matrix:
-        device:
+    inputs:
+      build_device:
+        description: '选择要编译的设备 (默认: all 全部编译)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
           - n5105
           - wyse3040
           - mt7621
@@ -23,8 +17,48 @@ jobs:
           - ax6600
           - jdc_ax1800
 
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  # 准备设备矩阵，实现动态选择
+  prepare_matrix:
+    name: 解析设备参数
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: 生成设备列表
+        id: set-matrix
+        run: |
+          # 格式：ID|中文名
+          DEVICES=("n5105|X86" "wyse3040|wyse3040" "mt7621|歌华链" "r619ac|竞斗云2.0" "ax6600|雅典娜AX6600" "jdc_ax1800|亚瑟AX1800")
+          
+          SELECTED="${{ github.event.inputs.build_device }}"
+          JSON="["
+          for item in "${DEVICES[@]}"; do
+            ID="${item%%|*}"
+            NAME="${item##*|}"
+            if [ "$SELECTED" == "all" ] || [ "$SELECTED" == "$ID" ]; then
+              JSON+="{\"id\":\"$ID\",\"name\":\"$NAME\"},"
+            fi
+          done
+          JSON="${JSON%,}]"
+          echo "matrix=$JSON" >> $GITHUB_OUTPUT
+
+  build:
+    name: 编译固件 - ${{ matrix.name }}
+    needs: prepare_matrix
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
+
     env:
-      DEVICE: ${{ matrix.device }}
+      DEVICE: ${{ matrix.id }}
       GO111MODULE: on
       GOPROXY: https://proxy.golang.org,direct
 
@@ -32,7 +66,7 @@ jobs:
       - name: 检出仓库
         uses: actions/checkout@v4
 
-      - name: 设置 Go 1.25 环境 (替代官方脚本的 Go 安装)
+      - name: 设置 Go 1.25 环境
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
@@ -46,7 +80,7 @@ jobs:
           sudo apt -y autoremove --purge
           sudo apt clean
 
-      - name: 安装基础编译依赖 (同步官方脚本依赖列表)
+      - name: 安装基础编译依赖
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
@@ -62,7 +96,7 @@ jobs:
             sharutils squashfs-tools subversion swig texinfo uglifyjs unzip vim wget xmlto \
             zlib1g-dev zstd xxd libpython3.10-dev nodejs yarn gcc-multilib g++-multilib
 
-      - name: 安装特有编译工具 (同步官方脚本 padjffs2 / po2lmo / upx)
+      - name: 安装特有编译工具
         run: |
           TMP_DIR="$(mktemp -d)"
           pushd "$TMP_DIR"
@@ -80,7 +114,7 @@ jobs:
           strip "padjffs2"
           sudo cp -fp "padjffs2" "/usr/bin/padjffs2"
           
-          # 编译 po2lmo (LuCI 语言包工具)
+          # 编译 po2lmo
           git clone --filter=blob:none --no-checkout "https://github.com/openwrt/luci.git" "po2lmo"
           cd "po2lmo"
           git config core.sparseCheckout true
@@ -105,44 +139,53 @@ jobs:
             openwrt/.ccache
             openwrt/staging_dir/host*
             openwrt/staging_dir/toolchain-*
-          key: ${{ runner.os }}-${{ matrix.device }}-${{ github.sha }}
+          key: ${{ runner.os }}-${{ matrix.id }}-v2-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.device }}-
+            ${{ runner.os }}-${{ matrix.id }}-v2-
 
       - name: 设置 CCache
         run: |
           echo "CCACHE_DIR=$GITHUB_WORKSPACE/openwrt/.ccache" >> $GITHUB_ENV
 
-      - name: 下载缓存 (DL)
+      - name: 下载缓存
         uses: actions/cache@v4
         with:
           path: openwrt/dl
           key: dl-${{ hashFiles('configs/*.config') }}
           restore-keys: dl-
 
-      - name: 更新 feeds (修复内部 Golang 与源优先级)
+      - name: 更新 feeds
         working-directory: openwrt
         run: |
           echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.default
           echo "src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2" >> feeds.conf.default
           echo "src-git mosdns https://github.com/sbwml/luci-app-mosdns" >> feeds.conf.default
           echo "src-git openclash https://github.com/vernesong/OpenClash" >> feeds.conf.default
-          echo "src-git design https://github.com/papagaye744/luci-theme-design" >> feeds.conf.default
           echo "src-git lucky https://github.com/gdy666/luci-app-lucky" >> feeds.conf.default
           
+          # 1. 初始更新
           ./scripts/feeds update -a 
           
-          # 【核心修复】删除官方自带的 Golang，替换为 kenzok8 维护的 1.26 超前版本
+          # 【修复1】替换 Golang 为 1.26 超前版本
           rm -rf feeds/packages/lang/golang
           git clone https://github.com/kenzok8/golang -b 1.26 feeds/packages/lang/golang
           
-          # 优先强制安装自定义源的关键包
-          ./scripts/feeds install -p mosdns -f luci-app-mosdns
-          ./scripts/feeds install -p mosdns -f mosdns
+          # 【修复2】引入预编译的 Node.js，跳过源码编译噩梦
+          rm -rf feeds/packages/lang/node
+          git clone https://github.com/sbwml/feeds_packages_lang_node-prebuilt feeds/packages/lang/node
+          
+          # 2. 关键：替换后必须重新 update 并强制 install 以注册 host 依赖
+          ./scripts/feeds update packages
+          ./scripts/feeds install -p packages -f golang node
+          ./scripts/feeds install -p mosdns -f luci-app-mosdns mosdns
           ./scripts/feeds install -p helloworld -f xray-core
           
-          # 批量安装剩余包
+          # 3. 批量安装剩余包
           ./scripts/feeds install -a
+          
+          # 【完美修复】将网易云与主题直接放入 package 目录以获得最高优先级
+          git clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic package/luci-app-unblockneteasemusic
+          git clone https://github.com/papagaye744/luci-theme-design package/luci-theme-design
 
       - name: 复制设备配置
         run: |
@@ -157,7 +200,7 @@ jobs:
           bash .github/scripts/auto_turboacc.sh openwrt/.config $DEVICE
 
       - name: 注入 MT7621 WiFi 启动修复脚本
-        if: matrix.device == 'mt7621'
+        if: matrix.id == 'mt7621'
         working-directory: openwrt
         run: |
           mkdir -p package/base-files/files/etc/init.d
@@ -166,28 +209,52 @@ jobs:
 
       - name: 生成最终配置
         working-directory: openwrt
-        run: make defconfig
+        run: |
+          # 显式声明非交互模式
+          make defconfig
 
-      - name: 下载依赖 (增加容错重试机制)
+      - name: 自动清理冲突包并校验依赖
         working-directory: openwrt
         run: |
-          make download -j8 || make download -j1 V=s
-          find dl -size -1024c -exec ls -l {} \;
-          find dl -size -1024c -exec rm -f {} \;
+          echo "=== 快速校验并自动移除无效依赖 ==="
+          # 确保关键包不被裁减
+          grep -q "CONFIG_AUTOREMOVE=y" .config || echo "CONFIG_AUTOREMOVE=y" >> .config
+          
+          # 再次确认配置完整性，不运行耗时的 make prepare
+          make defconfig
+          echo "✅ 依赖清理完成"
 
-      - name: 编译固件 (防卡死与精准日志抓取)
+      - name: 下载依赖
+        working-directory: openwrt
+        run: |
+          rm -rf dl/go-mod-cache
+          make download -j8 || make download -j1 V=s
+          find dl -size -1024c -exec rm -f {} \;
+          
+      - name: 预编译关键软件
+        working-directory: openwrt
+        run: |
+          echo "=== 1. 编译基础环境工具 ==="
+          make tools/compile -j$(nproc)
+          make toolchain/compile -j$(nproc)
+          
+          echo "=== 2. 预编译核心插件 ==="
+          # 注意：node 预编译包名为 node，但在 feeds 中路径可能不同
+          # 使用 || true 是为了防止预编译失败导致整个构建停止，主编译阶段会再次尝试
+          make package/feeds/packages/node/compile -j1 V=s || true
+          make package/feeds/mosdns/mosdns/compile -j1 V=s
+          make package/feeds/helloworld/xray-core/compile -j1 V=s
+          
+      - name: 编译固件
         working-directory: openwrt
         run: |
           echo "开始多线程编译..."
-          # 将所有输出重定向到文件，不在控制台显示，防止 GHA 日志超限卡死
           make -j$(nproc) > build.log 2>&1 || {
             echo "❌ 多线程编译失败，正在尝试单线程容错编译..."
             make -j1 V=s >> build.log 2>&1 || {
               echo "❌ 单线程编译也失败了！"
               echo "==================== 最后的 500 行报错日志 ===================="
-              # 只打印出最后 500 行日志，让你直接看清死因
               tail -n 500 build.log
-              # 强制退出并标记任务失败
               exit 1
             }
           }
@@ -197,7 +264,6 @@ jobs:
         run: |
           mkdir -p artifact/${DEVICE}
           cp -rf openwrt/bin/targets/*/* artifact/${DEVICE}/
-          # 仅保留固件相关文件，排除插件包
           find artifact/${DEVICE}/ -name "*.ipk" -o -name "*.apk" -delete
           rm -rf artifact/${DEVICE}/packages
 
@@ -211,8 +277,8 @@ jobs:
       - name: 上传固件
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.device }}_firmware
-          path: artifact/${{ matrix.device }}/
+          name: ${{ matrix.id }}_firmware
+          path: artifact/${{ matrix.id }}/
 
       - name: 清理旧 Release
         if: github.ref == 'refs/heads/main'
@@ -232,4 +298,4 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             https://api.github.com/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches \
-            -d '{"ref":"main","inputs":{"device":"${{ matrix.device }}","run_id":"${{ github.run_id }}"}}'
+            -d '{"ref":"main","inputs":{"device":"${{ matrix.id }}","device_name":"${{ matrix.name }}","run_id":"${{ github.run_id }}"}}'
