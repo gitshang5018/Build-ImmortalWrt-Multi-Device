@@ -154,8 +154,28 @@ jobs:
           echo "src-git openclash https://github.com/vernesong/OpenClash" >> feeds.conf.default
           echo "src-git design https://github.com/papagaye744/luci-theme-design" >> feeds.conf.default
           echo "src-git lucky https://github.com/gdy666/luci-app-lucky" >> feeds.conf.default
-          # 重新加回网易云插件源
-          echo "src-git unblockneteasemusic https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic" >> feeds.conf.default
+          # (注意：这里已经去掉了网易云的那行 echo)
+          
+          ./scripts/feeds update -a 
+          
+          # 【修复 1】替换 Golang 为 1.26 超前版本
+          rm -rf feeds/packages/lang/golang
+          git clone https://github.com/kenzok8/golang -b 1.26 feeds/packages/lang/golang
+          
+          # 【修复 2】引入预编译的 Node.js，跳过源码编译噩梦！
+          rm -rf feeds/packages/lang/node
+          git clone https://github.com/sbwml/feeds_packages_lang_node-prebuilt feeds/packages/lang/node
+          
+          # 优先强制安装自定义源的关键包
+          ./scripts/feeds install -p mosdns -f luci-app-mosdns
+          ./scripts/feeds install -p mosdns -f mosdns
+          ./scripts/feeds install -p helloworld -f xray-core
+          
+          # 批量安装剩余包
+          ./scripts/feeds install -a
+          
+          # 【完美修复】将网易云插件作为单包，直接克隆到 package 目录下
+          git clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic package/luci-app-unblockneteasemusic
           
           ./scripts/feeds update -a 
           
@@ -202,6 +222,10 @@ jobs:
       - name: 下载依赖 (增加容错重试机制)
         working-directory: openwrt
         run: |
+          # 【关键修复】：强制清除可能已经被缓存下来的、损坏的 Go 模块文件夹！
+          rm -rf dl/go-mod-cache
+          
+          # 然后再开始正常的下载流程
           make download -j8 || make download -j1 V=s
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
