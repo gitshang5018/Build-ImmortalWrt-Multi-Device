@@ -147,14 +147,14 @@ jobs:
         run: |
           echo "CCACHE_DIR=$GITHUB_WORKSPACE/openwrt/.ccache" >> $GITHUB_ENV
 
-      - name: 下载缓存 (DL)
+      - name: 下载缓存
         uses: actions/cache@v4
         with:
           path: openwrt/dl
           key: dl-${{ hashFiles('configs/*.config') }}
           restore-keys: dl-
 
-      - name: 更新 feeds (修复主题源与依赖警告)
+      - name: 更新 feeds
         working-directory: openwrt
         run: |
           echo "src-git helloworld https://github.com/fw876/helloworld" >> feeds.conf.default
@@ -207,7 +207,7 @@ jobs:
           cp $GITHUB_WORKSPACE/.github/scripts/mtwifi-init package/base-files/files/etc/init.d/mtwifi-init
           chmod +x package/base-files/files/etc/init.d/mtwifi-init
 
-      - name: 生成最终配置 (make defconfig)
+      - name: 生成最终配置
         working-directory: openwrt
         run: |
           # 显式声明非交互模式
@@ -222,30 +222,30 @@ jobs:
           
           # 再次确认配置完整性，不运行耗时的 make prepare
           make defconfig
-          echo "✅ 依赖清理完成 (快速模式)"
+          echo "✅ 依赖清理完成"
 
-      - name: 下载依赖 (增加容错重试机制)
+      - name: 下载依赖
         working-directory: openwrt
         run: |
           rm -rf dl/go-mod-cache
           make download -j8 || make download -j1 V=s
           find dl -size -1024c -exec rm -f {} \;
           
-      - name: 预编译关键软件 (确保依赖库完整性)
+      - name: 预编译关键软件
         working-directory: openwrt
         run: |
           echo "=== 1. 编译基础环境工具 ==="
           make tools/compile -j$(nproc)
           make toolchain/compile -j$(nproc)
           
-          echo "=== 2. 预编译核心插件 (单线程容错) ==="
+          echo "=== 2. 预编译核心插件 ==="
           # 注意：node 预编译包名为 node，但在 feeds 中路径可能不同
           # 使用 || true 是为了防止预编译失败导致整个构建停止，主编译阶段会再次尝试
           make package/feeds/packages/node/compile -j1 V=s || true
           make package/feeds/mosdns/mosdns/compile -j1 V=s
           make package/feeds/helloworld/xray-core/compile -j1 V=s
           
-      - name: 编译固件 (防卡死与精准日志抓取)
+      - name: 编译固件
         working-directory: openwrt
         run: |
           echo "开始多线程编译..."
