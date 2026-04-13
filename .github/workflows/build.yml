@@ -2,20 +2,14 @@ name: 编译 ImmortalWrt 多设备固件
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: write
-  actions: write
-
-jobs:
-  build:
-    name: 编译固件 - ${{ matrix.device }}
-    runs-on: ubuntu-22.04
-
-    strategy:
-      fail-fast: false
-      matrix:
-        device:
+    inputs:
+      build_device:
+        description: '选择要编译的设备 (默认: all 全部编译)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
           - n5105
           - wyse3040
           - mt7621
@@ -23,10 +17,44 @@ jobs:
           - ax6600
           - jdc_ax1800
 
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  # 新增：准备设备矩阵，实现动态选择
+  prepare_matrix:
+    name: 解析设备参数
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: 生成设备列表
+        id: set-matrix
+        run: |
+          # 如果选择了 all 或者没有输入（比如通过 API 触发），则输出包含所有设备的 JSON 数组
+          if [ "${{ github.event.inputs.build_device }}" == "" ] || [ "${{ github.event.inputs.build_device }}" == "all" ]; then
+            echo 'matrix=["n5105", "wyse3040", "mt7621", "r619ac", "ax6600", "jdc_ax1800"]' >> $GITHUB_OUTPUT
+          else
+            # 如果选择了特定设备，则输出只包含该设备的 JSON 数组
+            echo "matrix=[\"${{ github.event.inputs.build_device }}\"]" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: 编译固件 - ${{ matrix.device }}
+    needs: prepare_matrix # 必须等待 prepare_matrix 执行完毕
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 接收上一个任务传递过来的动态数组
+        device: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
+
     env:
       DEVICE: ${{ matrix.device }}
       GO111MODULE: on
-      GOPROXY: direct
+      GOPROXY: https://proxy.golang.org,direct
 
     steps:
       - name: 检出仓库
