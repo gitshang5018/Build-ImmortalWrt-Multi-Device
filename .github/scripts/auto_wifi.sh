@@ -9,19 +9,22 @@ echo "自动适配 WiFi 驱动 for $DEVICE"
 case "$DEVICE" in
 
   mt7621)
-    echo "→ MT7621: 启用闭源 WiFi 驱动 mtwifi（mt7603e + mt76x2e）"
+    echo "→ MT7621: 启用开源 WiFi 驱动 mt76 (mt7603 + mt76x2)"
     cat >> "$CONFIG_FILE" <<EOF
-# 闭源 WiFi 驱动
-CONFIG_PACKAGE_kmod-mt7603e=y
-CONFIG_PACKAGE_kmod-mt76x2e=y
-CONFIG_PACKAGE_luci-app-mtwifi=y
+# 启用开源 mt76 驱动
+CONFIG_PACKAGE_kmod-mt76=y
+CONFIG_PACKAGE_kmod-mt76-core=y
+CONFIG_PACKAGE_kmod-mt7603=y
+CONFIG_PACKAGE_kmod-mt76x2=y
+CONFIG_PACKAGE_wpad-openssl=y
+# 确保无线工具被安装
+CONFIG_PACKAGE_wireless-tools=y
+CONFIG_PACKAGE_iwinfo=y
 
-# 禁用开源 mt76
-# CONFIG_PACKAGE_kmod-mt76 is not set
-# CONFIG_PACKAGE_kmod-mt76-core is not set
-# CONFIG_PACKAGE_kmod-mt76-connac is not set
-# CONFIG_PACKAGE_kmod-mt7603 is not set
-# CONFIG_PACKAGE_kmod-mt76x2 is not set
+# 移除旧的闭源驱动配置（ImmortalWrt 已不支持）
+# CONFIG_PACKAGE_kmod-mt7603e is not set
+# CONFIG_PACKAGE_kmod-mt76x2e is not set
+# CONFIG_PACKAGE_luci-app-mtwifi is not set
 EOF
     ;;
 

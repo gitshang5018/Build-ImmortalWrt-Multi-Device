@@ -28,8 +28,21 @@ EOF
     ;;
 
   ax6600|jdc_ax1800)
-    echo "→ IPQ60xx: FullCone 内核已启用，无需额外配置"
-    # 不添加任何 TurboACC 选项
+    echo "→ IPQ60xx: 启用 NSS 加速 + FullCone"
+    cat >> "$CONFIG_FILE" <<EOF
+CONFIG_PACKAGE_kmod-qca-nss-drv=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-pppoe=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-vlan=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-bridge-mgr=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-tun6rd=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-tunipip6=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-l2tpv2=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-pptp=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-gre=y
+# 启用 TurboACC 中的 NSS 支持（如果包存在）
+CONFIG_PACKAGE_luci-app-turboacc=y
+CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_NSS=y
+EOF
     ;;
 
   n5105|wyse3040)

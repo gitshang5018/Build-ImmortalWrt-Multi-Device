@@ -2,4 +2,12 @@
 # 设置 LuCI 默认语言为简体中文
 uci set luci.main.lang='zh_cn'
 uci commit luci
+
+# 开启网络加速 (HNAT / Flow Offloading)
+# 这将确保 MTK (MT7621) 的 HNAT 和其他平台的硬件加速在首次启动时默认开启
+uci set firewall.@defaults[0].flow_offload='1'
+uci set firewall.@defaults[0].hw_flow_offload='1'
+uci set firewall.@defaults[0].fullcone='1'
+uci commit firewall
+
 exit 0
