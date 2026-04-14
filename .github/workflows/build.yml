@@ -228,22 +228,33 @@ jobs:
             awk -v tid="${TARGET_ID}" '$0 ~ "define Device/"tid {flag=1} /DEVICE_PACKAGES/{if(flag) {print; print "\t$(call Device/EmmcImage)"; print "\tIMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-rootfs | append-metadata"; flag=0; next}} 1' target/linux/qualcommax/image/ipq60xx.mk > temp.mk && mv temp.mk target/linux/qualcommax/image/ipq60xx.mk
           fi
 
+      - name: 注入全局初始化脚本
+        working-directory: openwrt
+        run: |
+          mkdir -p package/base-files/files/etc/uci-defaults
+          # 设置 LuCI 默认语言为简体中文
+          cp $GITHUB_WORKSPACE/.github/scripts/99-default-lang package/base-files/files/etc/uci-defaults/99-default-lang
+          chmod +x package/base-files/files/etc/uci-defaults/99-default-lang
+
+      - name: 补全中文翻译包
+        working-directory: openwrt
+        run: |
+          echo "=== 自动为所有 luci-app 添加中文翻译包 ==="
+          # 读取 .config 中所有已选中的 luci-app，自动追加对应的 i18n 包
+          grep -oP 'CONFIG_PACKAGE_luci-app-\K[^=]+' .config | while read app; do
+            i18n_key="CONFIG_PACKAGE_luci-i18n-${app}-zh-cn"
+            if ! grep -q "${i18n_key}=y" .config; then
+              echo "${i18n_key}=y" >> .config
+              echo "  + 追加: luci-i18n-${app}-zh-cn"
+            fi
+          done
+
       - name: 生成最终配置
         working-directory: openwrt
         run: |
           # 显式声明非交互模式
           make defconfig
 
-      - name: 自动清理冲突包并校验依赖
-        working-directory: openwrt
-        run: |
-          echo "=== 快速校验并自动移除无效依赖 ==="
-          # 确保关键包不被裁减
-          grep -q "CONFIG_AUTOREMOVE=y" .config || echo "CONFIG_AUTOREMOVE=y" >> .config
-          
-          # 再次确认配置完整性，不运行耗时的 make prepare
-          make defconfig
-          echo "✅ 依赖清理完成"
 
       - name: 下载依赖
         working-directory: openwrt
