@@ -12,18 +12,17 @@ case "$DEVICE" in
     echo "→ MT7621: 启用 HW NAT (mtk-hnat) + FlowOffload"
     cat >> "$CONFIG_FILE" <<EOF
 CONFIG_PACKAGE_kmod-mtk-hnat=y
-CONFIG_PACKAGE_luci-app-turboacc=y
-CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOAD=y
-CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_HW_OFFLOAD=y
-CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_FULLCONENAT=y
 EOF
     ;;
 
   r619ac)
-    echo "→ IPQ40xx: 启用 FullCone（FlowOffload 可选）"
+    echo "→ IPQ40xx: 启用 SFE 加速 + FullCone NAT"
     cat >> "$CONFIG_FILE" <<EOF
-CONFIG_PACKAGE_luci-app-turboacc=y
-CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_FULLCONENAT=y
+# Shortcut-FE 加速驱动
+CONFIG_PACKAGE_kmod-fast-classifier=y
+CONFIG_PACKAGE_kmod-shortcut-fe=y
+# FullCone NAT 支持
+CONFIG_PACKAGE_kmod-ipt-fullconenat=y
 EOF
     ;;
 
@@ -39,18 +38,17 @@ CONFIG_PACKAGE_kmod-qca-nss-drv-tunipip6=y
 CONFIG_PACKAGE_kmod-qca-nss-drv-l2tpv2=y
 CONFIG_PACKAGE_kmod-qca-nss-drv-pptp=y
 CONFIG_PACKAGE_kmod-qca-nss-drv-gre=y
-# 启用 TurboACC 中的 NSS 支持（如果包存在）
-CONFIG_PACKAGE_luci-app-turboacc=y
-CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_NSS=y
+# 原生支持 FullCone NAT
+CONFIG_PACKAGE_kmod-ipt-fullconenat=y
 EOF
     ;;
 
   n5105|wyse3040)
-    echo "→ x86_64: 可启用 Shortcut-FE（可选）"
+    echo "→ x86_64: 启用 Shortcut-FE (SFE) 加速"
     cat >> "$CONFIG_FILE" <<EOF
-# Shortcut-FE（可选）
-# CONFIG_PACKAGE_kmod-fast-classifier=y
-# CONFIG_PACKAGE_kmod-shortcut-fe=y
+# Shortcut-FE
+CONFIG_PACKAGE_kmod-fast-classifier=y
+CONFIG_PACKAGE_kmod-shortcut-fe=y
 EOF
     ;;
 

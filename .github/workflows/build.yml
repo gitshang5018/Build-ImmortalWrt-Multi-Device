@@ -233,8 +233,16 @@ jobs:
         working-directory: openwrt
         run: |
           echo "=== 自动为所有 luci-app 添加中文翻译包 ==="
-          # 读取 .config 中所有已选中的 luci-app，自动追加对应的 i18n 包
-          grep -oP 'CONFIG_PACKAGE_luci-app-\K[^=]+' .config | while read app; do
+          # 确保文件以换行符结尾，并统一转换为 Unix 换行符
+          sed -i '$a\' .config
+          sed -i 's/\r$//' .config
+          
+          # 读取 .config 中所有已选中的 luci-app（过滤注释行），自动追加对应的 i18n 包
+          grep '^CONFIG_PACKAGE_luci-app-' .config | grep '=y' | grep -oP 'luci-app-\K[^=]+' | while read app; do
+            # 清理可能的空格或特殊字符
+            app=$(echo "$app" | tr -d '\r' | xargs)
+            [ -z "$app" ] && continue
+            
             i18n_key="CONFIG_PACKAGE_luci-i18n-${app}-zh-cn"
             if ! grep -q "${i18n_key}=y" .config; then
               echo "${i18n_key}=y" >> .config
